@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" />
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Shooting Typing Game</title>
+<title>Shooting Typing Game with Jet</title>
 <style>
   body {
     background: #121212;
@@ -48,11 +48,37 @@
     margin-top: 10px;
     font-size: 24px;
   }
+  /* Jet style */
+  #jet {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(45deg, #3498db, #2980b9);
+    clip-path: polygon(
+      50% 0%, 70% 30%, 100% 40%, 70% 50%, 50% 100%, 30% 50%, 0% 40%, 30% 30%
+    );
+    filter: drop-shadow(0 0 5px #2980b9);
+  }
+  /* Bullet style */
+  .bullet {
+    position: absolute;
+    width: 6px;
+    height: 20px;
+    background: #f1c40f;
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 100;
+  }
 </style>
 </head>
 <body>
 
-<div id="game"></div>
+<div id="game">
+  <div id="jet"></div>
+</div>
 <input id="inputBox" type="text" placeholder="Type to shoot..." autofocus />
 <div id="score">Score: 0</div>
 
@@ -61,6 +87,7 @@
   const gameEl = document.getElementById('game');
   const inputBox = document.getElementById('inputBox');
   const scoreEl = document.getElementById('score');
+  const jet = document.getElementById('jet');
 
   const GAME_WIDTH = 800;
   const GAME_HEIGHT = 400;
@@ -76,7 +103,6 @@
     'return', 'if', 'else', 'for', 'while', 'break', 'continue',
   ];
 
-  // Enemy class
   class Enemy {
     constructor(word, x, y, speed) {
       this.word = word;
@@ -103,42 +129,83 @@
 
   let enemies = [];
 
-  // Spawn new enemy every 1.5 seconds
   function spawnEnemy() {
     const word = words[Math.floor(Math.random() * words.length)];
     const x = Math.random() * (GAME_WIDTH - 100);
     const y = -30;
-    const speed = 1 + Math.random() * 1.5; // 1 to 2.5 px/frame
+    const speed = 1 + Math.random() * 1.5;
     const enemy = new Enemy(word, x, y, speed);
     enemies.push(enemy);
   }
 
-  // Game loop
+  // Shoot bullet animation from jet to enemy
+  function shootBullet(targetX, targetY) {
+    const bullet = document.createElement('div');
+    bullet.classList.add('bullet');
+
+    // Jet center position
+    const jetRect = jet.getBoundingClientRect();
+    const gameRect = gameEl.getBoundingClientRect();
+
+    const startX = jetRect.left + jetRect.width / 2 - gameRect.left - 3; // bullet width/2 = 3
+    const startY = jetRect.top - gameRect.top;
+
+    bullet.style.left = startX + 'px';
+    bullet.style.top = startY + 'px';
+
+    gameEl.appendChild(bullet);
+
+    // Animate bullet upward to target
+    const duration = 400; // ms
+    const startTime = performance.now();
+
+    function animate(time) {
+      const elapsed = time - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      const currentX = startX + (targetX - startX) * progress;
+      const currentY = startY + (targetY - startY) * progress;
+
+      bullet.style.transform = `translate(${currentX - startX}px, ${currentY - startY}px)`;
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        bullet.remove();
+      }
+    }
+
+    requestAnimationFrame(animate);
+  }
+
   function gameLoop() {
-    // Move enemies
     enemies.forEach((enemy, i) => {
       enemy.move();
-      // Check if enemy reached bottom
       if (enemy.y > GAME_HEIGHT) {
-        // Game over
         alert(`Game Over! Your score: ${score}`);
         resetGame();
       }
     });
-
     requestAnimationFrame(gameLoop);
   }
 
-  // Check input to shoot enemies
   inputBox.addEventListener('input', e => {
     const typed = e.target.value.trim();
     if (typed === '') return;
 
-    // Find enemy matching typed word
     for (let i = 0; i < enemies.length; i++) {
       if (enemies[i].word === typed) {
-        // Destroy enemy
-        enemies[i].remove();
+        const enemy = enemies[i];
+
+        // Shoot bullet from jet to enemy
+        const enemyRect = enemy.el.getBoundingClientRect();
+        const gameRect = gameEl.getBoundingClientRect();
+        const targetX = enemyRect.left - gameRect.left + enemyRect.width / 2;
+        const targetY = enemyRect.top - gameRect.top + enemyRect.height / 2;
+
+        shootBullet(targetX, targetY);
+
+        enemy.remove();
         enemies.splice(i, 1);
         score++;
         scoreEl.textContent = `Score: ${score}`;
@@ -148,7 +215,6 @@
     }
   });
 
-  // Reset game
   function resetGame() {
     enemies.forEach(enemy => enemy.remove());
     enemies = [];
@@ -157,12 +223,8 @@
     inputBox.value = '';
   }
 
-  // Start spawning enemies
   setInterval(spawnEnemy, 1500);
-
-  // Start game loop
   gameLoop();
-
 })();
 </script>
 
