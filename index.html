@@ -1,386 +1,168 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Bomberman Clone</title>
+<title>Shooting Typing Game</title>
 <style>
   body {
-    background: #222;
+    background: #121212;
+    color: white;
+    font-family: monospace, monospace;
     margin: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    font-family: monospace;
-    user-select: none;
+    overflow: hidden;
   }
   #game {
-    display: grid;
-    grid-template-columns: repeat(15, 32px);
-    grid-template-rows: repeat(13, 32px);
-    gap: 1px;
-    background: #555;
-  }
-  .cell {
-    width: 32px;
-    height: 32px;
-    background: #ccc;
-    box-sizing: border-box;
     position: relative;
+    width: 800px;
+    height: 400px;
+    margin: 40px auto;
+    background: #222;
+    border: 3px solid #444;
+    overflow: hidden;
+    border-radius: 8px;
   }
-  .wall {
-    background: #444;
-  }
-  .block {
-    background: #a0522d;
-  }
-  .player1 {
-    background: #1e90ff;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  .enemy {
+    position: absolute;
+    top: 0;
+    background: #e74c3c;
+    padding: 5px 10px;
+    border-radius: 4px;
     font-weight: bold;
-    color: white;
-    font-size: 18px;
+    user-select: none;
+    white-space: nowrap;
   }
-  .player2 {
-    background: #ff4500;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: bold;
-    color: white;
-    font-size: 18px;
+  #inputBox {
+    display: block;
+    margin: 20px auto;
+    width: 800px;
+    font-size: 20px;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    outline: none;
+    box-sizing: border-box;
   }
-  .bot {
-    background: #32cd32;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: bold;
-    color: white;
-    font-size: 18px;
-  }
-  .bomb {
-    background: black;
-    border-radius: 50%;
-  }
-  .explosion {
-    background: yellow;
-    animation: flash 0.3s ease infinite alternate;
-  }
-  @keyframes flash {
-    from { background: yellow; }
-    to { background: orange; }
+  #score {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 24px;
   }
 </style>
 </head>
 <body>
-  <div id="game"></div>
+
+<div id="game"></div>
+<input id="inputBox" type="text" placeholder="Type to shoot..." autofocus />
+<div id="score">Score: 0</div>
 
 <script>
 (() => {
-  const ROWS = 13;
-  const COLS = 15;
-
-  // Cell types:
-  // 0 = empty
-  // 1 = wall (indestructible)
-  // 2 = block (destructible)
-  // player, bot, bombs tracked separately
-  let map = [];
-
-  // Generate initial map with walls around and blocks inside
-  function generateMap() {
-    map = [];
-    for (let r = 0; r < ROWS; r++) {
-      const row = [];
-      for (let c = 0; c < COLS; c++) {
-        // Border walls
-        if (r === 0 || r === ROWS-1 || c === 0 || c === COLS-1) {
-          row.push(1);
-        }
-        // Inner walls every 2 cells (like classic Bomberman)
-        else if (r % 2 === 0 && c % 2 === 0) {
-          row.push(1);
-        }
-        // Random blocks with 40% chance
-        else {
-          row.push(Math.random() < 0.4 ? 2 : 0);
-        }
-      }
-      map.push(row);
-    }
-
-    // Clear starting zones for players and bots:
-    // Player1 top-left corner (1,1),(1,2),(2,1)
-    map[1][1] = 0; map[1][2] = 0; map[2][1] = 0;
-    // Player2 bottom-right corner (ROWS-2,COLS-2),(ROWS-2,COLS-3),(ROWS-3,COLS-2)
-    map[ROWS-2][COLS-2] = 0; map[ROWS-2][COLS-3] = 0; map[ROWS-3][COLS-2] = 0;
-    // Bot1 top-right corner (1, COLS-2), (1, COLS-3), (2, COLS-2)
-    map[1][COLS-2] = 0; map[1][COLS-3] = 0; map[2][COLS-2] = 0;
-    // Bot2 bottom-left corner (ROWS-2,1), (ROWS-3,1), (ROWS-2,2)
-    map[ROWS-2][1] = 0; map[ROWS-3][1] = 0; map[ROWS-2][2] = 0;
-  }
-
-  // Render the map & entities
   const gameEl = document.getElementById('game');
+  const inputBox = document.getElementById('inputBox');
+  const scoreEl = document.getElementById('score');
 
-  // Entities state
-  const players = [
-    { id: 'player1', r: 1, c: 1, alive: true, symbol: 'P1' },
-    { id: 'player2', r: ROWS - 2, c: COLS - 2, alive: true, symbol: 'P2' },
+  const GAME_WIDTH = 800;
+  const GAME_HEIGHT = 400;
+
+  let score = 0;
+
+  // Words for enemies
+  const words = [
+    'code', 'javascript', 'html', 'css', 'function', 'variable',
+    'object', 'array', 'loop', 'event', 'document', 'window',
+    'style', 'element', 'browser', 'console', 'debug', 'script',
+    'string', 'number', 'boolean', 'null', 'undefined', 'let', 'const',
+    'return', 'if', 'else', 'for', 'while', 'break', 'continue',
   ];
-  const bots = [
-    { id: 'bot1', r: 1, c: COLS - 2, alive: true, symbol: 'B1', dir: null, moveCooldown: 0 },
-    { id: 'bot2', r: ROWS - 2, c: 1, alive: true, symbol: 'B2', dir: null, moveCooldown: 0 },
-  ];
 
-  // Bombs: array of {r, c, owner, timer}
-  let bombs = [];
-
-  // Explosions: array of cells with explosion timestamp to remove after short time
-  let explosions = [];
-
-  // Directions helper
-  const DIRS = {
-    up: [-1, 0],
-    down: [1, 0],
-    left: [0, -1],
-    right: [0, 1],
-  };
-
-  function cellKey(r,c){ return `${r},${c}`; }
-
-  // Check if cell is walkable for players/bots (no wall, no block, no bomb)
-  function isWalkable(r,c) {
-    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
-    if (map[r][c] === 1 || map[r][c] === 2) return false;
-    if (bombs.some(b => b.r === r && b.c === c)) return false;
-    return true;
-  }
-
-  // Rendering function
-  function render() {
-    gameEl.innerHTML = '';
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const cell = document.createElement('div');
-        cell.classList.add('cell');
-
-        // Add walls/blocks
-        if (map[r][c] === 1) cell.classList.add('wall');
-        else if (map[r][c] === 2) cell.classList.add('block');
-
-        // Check bombs
-        const bombHere = bombs.find(b => b.r === r && b.c === c);
-        if (bombHere) {
-          const bombEl = document.createElement('div');
-          bombEl.classList.add('bomb');
-          cell.appendChild(bombEl);
-        }
-
-        // Explosions
-        if (explosions.some(e => e.r === r && e.c === c)) {
-          cell.classList.add('explosion');
-        }
-
-        // Players
-        for (const p of players) {
-          if (p.alive && p.r === r && p.c === c) {
-            cell.classList.add(p.id === 'player1' ? 'player1' : 'player2');
-            cell.textContent = p.symbol;
-          }
-        }
-
-        // Bots
-        for (const b of bots) {
-          if (b.alive && b.r === r && b.c === c) {
-            cell.classList.add('bot');
-            cell.textContent = b.symbol;
-          }
-        }
-
-        gameEl.appendChild(cell);
-      }
+  // Enemy class
+  class Enemy {
+    constructor(word, x, y, speed) {
+      this.word = word;
+      this.x = x;
+      this.y = y;
+      this.speed = speed; // pixels per frame
+      this.el = document.createElement('div');
+      this.el.classList.add('enemy');
+      this.el.textContent = word;
+      gameEl.appendChild(this.el);
+      this.updatePosition();
+    }
+    updatePosition() {
+      this.el.style.transform = `translate(${this.x}px, ${this.y}px)`;
+    }
+    move() {
+      this.y += this.speed;
+      this.updatePosition();
+    }
+    remove() {
+      gameEl.removeChild(this.el);
     }
   }
 
-  // Move entity (player or bot) if possible
-  function moveEntity(entity, dr, dc) {
-    if (!entity.alive) return;
-    const nr = entity.r + dr;
-    const nc = entity.c + dc;
-    if (isWalkable(nr, nc)) {
-      entity.r = nr;
-      entity.c = nc;
-    }
+  let enemies = [];
+
+  // Spawn new enemy every 1.5 seconds
+  function spawnEnemy() {
+    const word = words[Math.floor(Math.random() * words.length)];
+    const x = Math.random() * (GAME_WIDTH - 100);
+    const y = -30;
+    const speed = 1 + Math.random() * 1.5; // 1 to 2.5 px/frame
+    const enemy = new Enemy(word, x, y, speed);
+    enemies.push(enemy);
   }
 
-  // Bomb logic
-  function placeBomb(owner) {
-    // Limit 1 bomb per player/bot for simplicity
-    if (bombs.some(b => b.owner === owner)) return;
-
-    // Find entity pos
-    let entity;
-    if (owner === 'player1') entity = players[0];
-    else if (owner === 'player2') entity = players[1];
-    else entity = bots.find(b => b.id === owner);
-
-    if (!entity || !entity.alive) return;
-
-    bombs.push({ r: entity.r, c: entity.c, owner: owner, timer: 3 }); // 3 seconds timer
-  }
-
-  // Explosion logic: explode bomb at position, remove blocks and kill entities caught
-  function explodeBomb(bomb) {
-    const { r, c } = bomb;
-    explosions.push({ r, c, time: Date.now() });
-
-    // Explosion blast range
-    const range = 2;
-
-    // Function to process blast line in one direction
-    function blastLine(dr, dc) {
-      for (let i = 1; i <= range; i++) {
-        const rr = r + dr * i;
-        const cc = c + dc * i;
-        if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS) break;
-        if (map[rr][cc] === 1) break; // wall blocks blast
-        explosions.push({ r: rr, c: cc, time: Date.now() });
-
-        if (map[rr][cc] === 2) { // destructible block destroyed, stop blast
-          map[rr][cc] = 0;
-          break;
-        }
-      }
-    }
-    // center blast already added
-    blastLine(-1,0);
-    blastLine(1,0);
-    blastLine(0,-1);
-    blastLine(0,1);
-
-    // Check entities hit by explosion
-    function hitEntity(entity) {
-      if (!entity.alive) return false;
-      for (const e of explosions) {
-        if (entity.r === e.r && entity.c === e.c) {
-          return true;
-        }
-      }
-      return false;
-    }
-    for (const p of players) {
-      if (hitEntity(p)) {
-        p.alive = false;
-      }
-    }
-    for (const b of bots) {
-      if (hitEntity(b)) {
-        b.alive = false;
-      }
-    }
-  }
-
-  // Game loop timer (bombs countdown, explosions removal, bots AI)
-  function gameTick() {
-    // Update bombs timers
-    for (let i = bombs.length -1; i >= 0; i--) {
-      bombs[i].timer -= 0.1;
-      if (bombs[i].timer <= 0) {
-        explodeBomb(bombs[i]);
-        bombs.splice(i, 1);
-      }
-    }
-
-    // Remove old explosions (> 0.5s)
-    const now = Date.now();
-    explosions = explosions.filter(e => now - e.time < 500);
-
-    // Bots AI movement every ~0.5 seconds
-    bots.forEach(bot => {
-      if (!bot.alive) return;
-      bot.moveCooldown -= 0.1;
-      if (bot.moveCooldown <= 0) {
-        bot.moveCooldown = 5; // 0.5 seconds
-        // Random move direction
-        const directions = Object.values(DIRS);
-        // Try random directions until can move or skip move
-        let moved = false;
-        for (let i = 0; i < directions.length && !moved; i++) {
-          const [dr, dc] = directions[Math.floor(Math.random()*directions.length)];
-          const nr = bot.r + dr;
-          const nc = bot.c + dc;
-          if (isWalkable(nr, nc)) {
-            bot.r = nr;
-            bot.c = nc;
-            moved = true;
-          }
-        }
-        // Random chance to place bomb near blocks (simplified)
-        if (Math.random() < 0.2) placeBomb(bot.id);
+  // Game loop
+  function gameLoop() {
+    // Move enemies
+    enemies.forEach((enemy, i) => {
+      enemy.move();
+      // Check if enemy reached bottom
+      if (enemy.y > GAME_HEIGHT) {
+        // Game over
+        alert(`Game Over! Your score: ${score}`);
+        resetGame();
       }
     });
 
-    render();
-
-    // Check game over
-    if (!players[0].alive && !players[1].alive) {
-      alert("Game Over! Both players died.");
-      resetGame();
-      return;
-    }
-
-    requestAnimationFrame(gameTick);
+    requestAnimationFrame(gameLoop);
   }
+
+  // Check input to shoot enemies
+  inputBox.addEventListener('input', e => {
+    const typed = e.target.value.trim();
+    if (typed === '') return;
+
+    // Find enemy matching typed word
+    for (let i = 0; i < enemies.length; i++) {
+      if (enemies[i].word === typed) {
+        // Destroy enemy
+        enemies[i].remove();
+        enemies.splice(i, 1);
+        score++;
+        scoreEl.textContent = `Score: ${score}`;
+        inputBox.value = '';
+        return;
+      }
+    }
+  });
 
   // Reset game
   function resetGame() {
-    generateMap();
-    players[0].r = 1; players[0].c = 1; players[0].alive = true;
-    players[1].r = ROWS - 2; players[1].c = COLS - 2; players[1].alive = true;
-    bots[0].r = 1; bots[0].c = COLS - 2; bots[0].alive = true;
-    bots[1].r = ROWS - 2; bots[1].c = 1; bots[1].alive = true;
-    bombs = [];
-    explosions = [];
-    render();
+    enemies.forEach(enemy => enemy.remove());
+    enemies = [];
+    score = 0;
+    scoreEl.textContent = `Score: ${score}`;
+    inputBox.value = '';
   }
 
-  // Input handling
-  window.addEventListener('keydown', e => {
-    if (e.repeat) return; // ignore holding keys
+  // Start spawning enemies
+  setInterval(spawnEnemy, 1500);
 
-    // Player 1 controls (WASD + space)
-    const p1 = players[0];
-    if (p1.alive) {
-      if (e.key === 'w' || e.key === 'W') moveEntity(p1, -1, 0);
-      else if (e.key === 'a' || e.key === 'A') moveEntity(p1, 0, -1);
-      else if (e.key === 's' || e.key === 'S') moveEntity(p1, 1, 0);
-      else if (e.key === 'd' || e.key === 'D') moveEntity(p1, 0, 1);
-      else if (e.code === 'Space') placeBomb('player1');
-    }
+  // Start game loop
+  gameLoop();
 
-    // Player 2 controls (Arrows + Numpad 0)
-    const p2 = players[1];
-    if (p2.alive) {
-      if (e.key === 'ArrowUp') moveEntity(p2, -1, 0);
-      else if (e.key === 'ArrowLeft') moveEntity(p2, 0, -1);
-      else if (e.key === 'ArrowDown') moveEntity(p2, 1, 0);
-      else if (e.key === 'ArrowRight') moveEntity(p2, 0, 1);
-      else if (e.key === '0' || e.key === 'Insert') placeBomb('player2');
-      // '0' on numpad is e.key = '0', but might differ on some keyboards
-    }
-
-    render();
-  });
-
-  // Initialize and start
-  resetGame();
-  gameTick();
 })();
 </script>
 
